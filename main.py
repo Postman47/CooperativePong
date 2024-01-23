@@ -7,8 +7,9 @@ from copy import deepcopy
 
 import supersuit as ss
 import tensorflow
+import torch
 from stable_baselines3 import PPO, DQN
-from stable_baselines3.ppo import CnnPolicy
+from stable_baselines3.ppo import CnnPolicy,MlpPolicy
 # from stable_baselines3.dqn import CnnPolicy
 from stable_baselines3.common.vec_env import VecMonitor
 
@@ -21,15 +22,16 @@ def train(env_fn, steps: int = 10_000, seed: int | None = 0, **env_kwargs):
 
     # Pre-process using SuperSuit
     env = ss.color_reduction_v0(env, mode="B")
+    env = ss.dtype_v0(env, 'float32')
     env = ss.resize_v1(env, x_size=84, y_size=84)
-    env = ss.frame_stack_v1(env, 3)
-
+    env = ss.frame_stack_v1(env, 4)
+    env = ss.normalize_obs_v0(env, env_min=0, env_max=1)
     env.reset(seed=seed)
 
     print(f"Starting training on {str(env.metadata['name'])}.")
 
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 8, num_cpus=1, base_class="stable_baselines3")
+    env = ss.concat_vec_envs_v1(env, 2, num_cpus=1, base_class="stable_baselines3")
     eval_env = deepcopy(env)
 
     eval_env = VecMonitor(eval_env)
@@ -40,7 +42,7 @@ def train(env_fn, steps: int = 10_000, seed: int | None = 0, **env_kwargs):
 
     # Use a CNN policy if the observation space is visual
     model = PPO(
-        CnnPolicy,
+        MlpPolicy,
         eval_env,
         device="cuda",
         # buffer_size=10000,
@@ -65,8 +67,10 @@ def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwa
 
     # Pre-process using SuperSuit
     env = ss.color_reduction_v0(env, mode="B")
+    env = ss.dtype_v0(env, 'float32')
     env = ss.resize_v1(env, x_size=84, y_size=84)
-    env = ss.frame_stack_v1(env, 3)
+    env = ss.frame_stack_v1(env, 4)
+    env = ss.normalize_obs_v0(env, env_min=0, env_max=1)
 
     print(
         f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})"
@@ -132,6 +136,7 @@ def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwa
 
 
 if __name__ == "__main__":
+        print("test")
         env_fn = cooperative_pong_v5
 
         # Set vector_state to false in order to use visual observations (significantly longer training time)
@@ -140,7 +145,7 @@ if __name__ == "__main__":
                           off_screen_penalty=-10)
 
         # Train a model (takes ~5 minutes on a laptop CPU)
-        # train(env_fn, steps=2_500_000, seed=0, **env_kwargs)
+        train(env_fn, steps=80000, seed=0, **env_kwargs)
 
         # Evaluate 10 games (takes ~10 seconds on a laptop CPU)
         # eval(env_fn, num_games=100, render_mode=None, **env_kwargs)
